@@ -1,0 +1,14 @@
+name: Ench5
+version: 1.0.0
+main: ench5.Ench5Plugin
+api-version: '1.21'
+description: Protection V and Unbreaking V books
+commands:
+  ench5:
+    description: Give Protection V / Unbreaking V books or enchant held item
+    usage: /ench5 <book|hand>
+    permission: ench5.use
+permissions:
+  ench5.use:
+    description: Use /ench5
+    default: op
