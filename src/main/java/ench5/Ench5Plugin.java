@@ -6,23 +6,97 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-public class Ench5Plugin extends JavaPlugin {
+public class Ench5Plugin extends JavaPlugin implements Listener {
 
     private static final int LEVEL = 5;
 
-    private Enchantment protection() {
-        return Enchantment.getByKey(NamespacedKey.minecraft("protection"));
+    // Зачарование -> новый максимальный уровень в наковальне
+    private final Map<Enchantment, Integer> maxLevels = new LinkedHashMap<>();
+
+    @Override
+    public void onEnable() {
+        putMax("protection", 5);
+        putMax("unbreaking", 5); // удали эту строку, если Прочность не нужна
+        getServer().getPluginManager().registerEvents(this, this);
     }
 
-    private Enchantment unbreaking() {
-        return Enchantment.getByKey(NamespacedKey.minecraft("unbreaking"));
+    private void putMax(String key, int level) {
+        Enchantment e = Enchantment.getByKey(NamespacedKey.minecraft(key));
+        if (e != null) {
+            maxLevels.put(e, level);
+        }
     }
+
+    // ---------- Наковальня ----------
+
+    @EventHandler
+    public void onAnvil(PrepareAnvilEvent event) {
+        ItemStack result = event.getResult();
+        if (result == null || result.getType() == Material.AIR) return;
+
+        ItemStack left = event.getInventory().getItem(0);
+        ItemStack right = event.getInventory().getItem(1);
+        if (left == null || right == null) return;
+
+        ItemStack fixed = result.clone();
+        boolean changed = false;
+
+        for (Map.Entry<Enchantment, Integer> entry : maxLevels.entrySet()) {
+            Enchantment e = entry.getKey();
+            int cap = entry.getValue();
+
+            int resultLevel = levelOf(fixed, e);
+            if (resultLevel == 0) continue; // ваниль это зачарование не оставила (несовместимо)
+
+            int l1 = levelOf(left, e);
+            int l2 = levelOf(right, e);
+            if (l1 == 0 && l2 == 0) continue;
+
+            int wanted = (l1 == l2) ? l1 + 1 : Math.max(l1, l2);
+            wanted = Math.min(wanted, cap);
+
+            if (wanted > resultLevel) {
+                setLevel(fixed, e, wanted);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            event.setResult(fixed);
+        }
+    }
+
+    private int levelOf(ItemStack item, Enchantment e) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta instanceof EnchantmentStorageMeta storage) {
+            return storage.getStoredEnchantLevel(e);
+        }
+        return item.getEnchantmentLevel(e);
+    }
+
+    private void setLevel(ItemStack item, Enchantment e, int level) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta instanceof EnchantmentStorageMeta storage) {
+            storage.addStoredEnchant(e, level, true);
+            item.setItemMeta(storage);
+        } else {
+            item.addUnsafeEnchantment(e, level);
+        }
+    }
+
+    // ---------- Команды (как раньше) ----------
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -36,8 +110,8 @@ public class Ench5Plugin extends JavaPlugin {
             return true;
         }
 
-        Enchantment prot = protection();
-        Enchantment unb = unbreaking();
+        Enchantment prot = Enchantment.getByKey(NamespacedKey.minecraft("protection"));
+        Enchantment unb = Enchantment.getByKey(NamespacedKey.minecraft("unbreaking"));
         if (prot == null || unb == null) {
             player.sendMessage("§cНе удалось найти зачарования на этой версии.");
             return true;
