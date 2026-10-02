@@ -1,0 +1,85 @@
+package ench5;
+
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.HashMap;
+
+public class Ench5Plugin extends JavaPlugin {
+
+    private static final int LEVEL = 5;
+
+    private Enchantment protection() {
+        return Enchantment.getByKey(NamespacedKey.minecraft("protection"));
+    }
+
+    private Enchantment unbreaking() {
+        return Enchantment.getByKey(NamespacedKey.minecraft("unbreaking"));
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("Только для игроков.");
+            return true;
+        }
+        if (args.length == 0) {
+            player.sendMessage("§e/ench5 book §7- выдать книги Защита V и Прочность V");
+            player.sendMessage("§e/ench5 hand §7- наложить Защиту V и Прочность V на предмет в руке");
+            return true;
+        }
+
+        Enchantment prot = protection();
+        Enchantment unb = unbreaking();
+        if (prot == null || unb == null) {
+            player.sendMessage("§cНе удалось найти зачарования на этой версии.");
+            return true;
+        }
+
+        switch (args[0].toLowerCase()) {
+            case "book" -> {
+                giveBook(player, prot);
+                giveBook(player, unb);
+                player.sendMessage("§aВыданы книги: Защита V и Прочность V.");
+            }
+            case "hand" -> {
+                ItemStack item = player.getInventory().getItemInMainHand();
+                if (item.getType() == Material.AIR) {
+                    player.sendMessage("§cВозьми предмет в руку.");
+                    return true;
+                }
+                int applied = 0;
+                if (prot.canEnchantItem(item)) {
+                    item.addUnsafeEnchantment(prot, LEVEL);
+                    applied++;
+                }
+                if (unb.canEnchantItem(item)) {
+                    item.addUnsafeEnchantment(unb, LEVEL);
+                    applied++;
+                }
+                player.sendMessage(applied > 0
+                        ? "§aЗачарования наложены (" + applied + ")."
+                        : "§cЭтот предмет не подходит для Защиты и Прочности.");
+            }
+            default -> player.sendMessage("§cИспользуй: /ench5 book | hand");
+        }
+        return true;
+    }
+
+    private void giveBook(Player player, Enchantment enchantment) {
+        ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
+        EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
+        meta.addStoredEnchant(enchantment, LEVEL, true);
+        book.setItemMeta(meta);
+
+        HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(book);
+        leftover.values().forEach(i -> player.getWorld().dropItemNaturally(player.getLocation(), i));
+    }
+}
